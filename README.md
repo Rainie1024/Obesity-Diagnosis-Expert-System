@@ -1,4 +1,4 @@
-# Obesity-Diagnosis-Expert-System
+# Obesity Diagnosis Expert System
 
 
 ## Software environments：
