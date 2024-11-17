@@ -6,7 +6,7 @@ library(tidyverse)
 library(randomForest)
 
 
-model <- readRDS("C:/Users/17839/Desktop/Thesis_work/obesity_model.rds")
+model <- readRDS("...")
 
 function(input, output,session){
   
