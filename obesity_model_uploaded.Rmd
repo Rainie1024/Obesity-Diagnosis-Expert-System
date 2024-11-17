@@ -1,0 +1,1019 @@
+---
+title: "obesity model"
+author: "XXX"
+date: "2024"
+output:
+  html_notebook: 
+    highlight: tango
+    theme: spacelab
+    toc: yes
+    toc_float: yes
+    toc_depth: 5
+  html_document:
+    df_print: paged
+---
+## Preparing the R environment
+### Set the location of the directory
+```{r setup, include=FALSE}
+if (!require('knitr')) install.packages('knitr'); library('knitr')
+opts_knit$set(root.dir = "...")
+
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+
+### Import related packages
+```{r}
+
+if (!require('tidyverse')) install.packages('tidyverse'); library('tidyverse')
+if (!require('GGally')) install.packages('GGally'); library('GGally')
+if (!require('cowplot')) install.packages('cowplot'); library('cowplot')
+if (!require('rpart')) install.packages('rpart'); library('rpart')
+if (!require('rpart.plot')) install.packages('rpart.plot'); library('rpart.plot')
+if (!require('randomForest')) install.packages('randomForest'); library('randomForest')
+if (!require('caret')) install.packages('caret'); library('caret')
+if (!require('inspectdf')) install.packages('inspectdf'); library('inspectdf')
+if (!require('DMwR2')) install.packages('DMwR2'); library('DMwR2')
+if (!require('grid')) install.packages('grid'); library('grid')
+```
+
+
+## Data processing
+
+### Read data set
+```{r}
+obesity_data <- read.csv("ObesityDataSet.csv")
+
+str(obesity_data)
+inspect_types(obesity_data)
+```
+
+### Change columns name
+```{r}
+names(obesity_data) <- c("gender","age","height","weight","fam_history","eat_highcal","vegetables","num_meals","betw_meals","smoke","num_water","monitor_cal","num_exercise","time_devices","num_alcohol","transportation","obe_level")
+```
+
+
+
+### covert into integer or numeric
+```{r}
+obesity_data$height <- round(obesity_data$height,2)
+
+
+cols <- c("age","weight", "vegetables", "num_meals","num_water","num_exercise","time_devices")
+
+for (i in cols){
+  obesity_data[,i] <- as.integer(unlist(obesity_data[,i]))
+}
+
+```
+
+
+
+### define target variables
+```{r}
+obesity_data <- obesity_data %>% 
+  mutate(BMI = round(obesity_data$weight / ((obesity_data$height) ^ 2),1),
+         category = case_when(
+           BMI < 18.5 ~ "Underweight",
+           BMI >= 18.5 & BMI <= 24.9 ~ "Normalweight",
+           BMI >= 25.0 & BMI <= 29.9 ~ "Overweight",
+           BMI >= 30.0 & BMI <= 34.9 ~ "Obesity_I",
+           BMI >= 35.0 & BMI <= 39.9 ~ "Obesity_II",
+           BMI >= 40.0 ~ "Obesity_III"))
+
+```
+
+
+
+
+```{r}
+inspect_na(obesity_data)
+```
+
+
+
+
+```{r}
+obesity <- obesity_data %>% 
+  select(-obe_level) %>% 
+  rename(obe_level = category)
+```
+
+```{r}
+str(obesity)
+```
+
+
+
+### variable  recoding
+```{r}
+obesity$gender <- ifelse(obesity$gender == "Male",2,1)
+
+obesity$fam_history <- ifelse(obesity$fam_history == "yes",2,1)
+
+obesity$eat_highcal <- ifelse(obesity$eat_highcal == "yes",2,1)
+
+obesity$smoke <- ifelse(obesity$smoke == "yes",2,1)
+
+obesity$monitor_cal <- ifelse(obesity$monitor_cal == "yes",2,1)
+
+
+obesity$betw_meals <- recode(obesity$betw_meals,"no" = 1,
+                                                "Sometimes" = 2,
+                                                "Frequently" = 3,
+                                                "Always" = 4)
+ 
+obesity$num_alcohol <- recode(obesity$num_alcohol,"no" = 1,
+                                                  "Sometimes" = 2,
+                                                  "Frequently" = 3,
+                                                  "Always" = 4)
+
+obesity$transportation <- recode(obesity$transportation,"Bike" = 1,
+                                                        "Motorbike" = 2,
+                                                        "Automobile" = 3,
+                                                        "Public_Transportation" = 4,
+                                                        "Walking" = 5)
+
+
+obesity$obe_level <- recode(obesity$obe_level,"Underweight" = 1,
+                                              "Normalweight" = 2,
+                                              "Overweight" = 3,
+                                              "Obesity_I" = 4,
+                                              "Obesity_II" = 5,
+                                              "Obesity_III" = 6)
+                                              
+
+
+# change original number
+
+obesity$num_exercise <- recode(obesity$num_exercise,"0" = 1,
+                                                    "1" = 2,
+                                                    "2" = 3,
+                                                      "3" = 4)
+
+
+obesity$time_devices <- recode(obesity$time_devices,"0" = 1,
+                                                     "1" = 2,
+                                                     "2" = 3)
+                                                 
+```
+
+
+
+```{r}
+
+inspect_na(obesity)
+
+```
+
+
+```{r}
+inspect_types(obesity)
+```
+
+```{r}
+str(obesity)
+```
+
+
+
+
+```{r}
+
+obesity$gender <- factor(obesity$gender, 
+                            levels = c("1", "2"), 
+                            labels = c("Female", "Males"))
+
+obesity$fam_history <- factor(obesity$fam_history, 
+                               levels = c("1", "2"), 
+                               labels = c("No", "Yes"))
+
+obesity$eat_highcal <- factor(obesity$eat_highcal, 
+                               levels = c("1", "2"), 
+                               labels = c("No", "Yes"))
+
+obesity$betw_meals <- factor(obesity$betw_meals, 
+                               levels = c("1", "2","3","4"), 
+                               labels = c("No", "Sometimes","Frequently","Always"))
+
+
+obesity$smoke <- factor(obesity$smoke, 
+                               levels = c("1", "2"), 
+                               labels = c("No", "Yes"))
+
+obesity$monitor_cal <- factor(obesity$monitor_cal, 
+                               levels = c("1", "2"), 
+                               labels = c("No", "Yes"))
+
+
+obesity$num_exercise <- factor(obesity$num_exercise, 
+                               levels = c("1", "2","3","4"), 
+                               labels = c("I do not have", "1 or 2 days ","2 or 4 days","4 or 5 days"))
+
+
+obesity$time_devices <- factor(obesity$time_devices, 
+                               levels = c("1", "2","3"), 
+                               labels = c("0-2 hours", "3-5 hours","more than 5 hours"))
+
+
+obesity$num_alcohol <- factor(obesity$num_alcohol, 
+                               levels = c("1", "2","3","4"), 
+                               labels = c("No", "Sometimes","Frequently","Always"))
+
+obesity$transportation <- factor(obesity$transportation, 
+                               levels = c("1", "2","3","4","5"), 
+                               labels = c("bike", "motorbike","automobile","public transportation","walking"))
+
+
+obesity$vegetables <- factor(obesity$vegetables, 
+                               levels = c("1", "2","3"), 
+                               labels = c("never", "Sometimes","Always"))
+
+obesity$num_meals <- factor(obesity$num_meals, 
+                               levels = c("1", "2","3","4"), 
+                               labels = c("between 1 and 2", "Three","more than 3","no answer"))
+
+obesity$num_water <- factor(obesity$num_water, 
+                               levels = c("1", "2","3"),
+                               labels = c("less than 1 L", "between 1 and 2L","more than 2L"))
+
+
+obesity$obe_level <- factor(obesity$obe_level, 
+                            levels = c("1", "2", "3","4","5","6"), 
+                            labels = c("Underweight", "Normalweight", "Overweight","Obesity_I","Obesity_II","Obesity_III"))
+```
+
+
+
+
+```{r}
+str(obesity)
+```
+
+## Analyse the relationship between variables and obesity
+
+Exploratory data analysis and get a general overview of the variables.
+
+### General overview of the variables
+
+```{r}
+summary(obesity)
+```
+
+```{r}
+inspect_cat(obesity)
+```
+
+
+```{r}
+inspect_num(obesity)
+```
+
+```{r}
+inspect_na(obesity)
+```
+
+cheack the number of the obeisty level, and to see  the dataset if it is balanced.
+```{r}
+obesity %>% 
+  count(obe_level)
+```
+
+```{r}
+
+ggplot(data = obesity, mapping = aes(x = obe_level, fill = obe_level)) +
+  geom_bar() +
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.5) +  # 在每个柱子上添加文本标签
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+```
+
+
+
+we can see that the distribution of the obesity level is balanced, so we don't need to address the imbalanced class problem.
+
+
+
+## Exploryatory analysis
+### The gender of a person
+Female = 0
+male = 1  
+```{r}
+ggplot(data = obesity, mapping = aes(x= gender, fill = obe_level )) + 
+  geom_bar() + 
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank())
+```
+The number of men and women is quite similar.
+
+
+
+### The age of a person
+
+```{r}
+plot.count <- ggplot(data = obesity,mapping = aes(x= age, fill = obe_level)) + 
+              geom_histogram(binwidth = 1) + 
+              theme(legend.position = "none",axis.title.x = element_blank(), axis.title.y = element_blank()) 
+
+plot.frequency <- ggplot(data = obesity,mapping = aes(x= age, fill = obe_level)) + 
+              geom_histogram(binwidth = 1, position = "fill") + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) 
+plot_grid(plot.count,plot.frequency,rel_widths = c(1,1.4))
+```
+The main number of people surveyed were aged 16-27 and adolescents are prone to obesity.
+
+
+
+```{r}
+ggplot(obesity, aes(x = obe_level, y = age, fill = obe_level)) +
+  geom_boxplot() +
+  labs(title = "Age Distribution across Obesity Levels", x = "Obesity Level", y = "Age") +
+  theme_minimal()
+```
+
+we can see that the boxplot distribution of normal weight and underweight are more concentrated, therefore it can be concluded that Normal Weight  and underweight are mostly concentrated in twenties. 
+
+However, the distribution of the obese group is quite spread out, with the overall distribution being between the ages of 20-30. Therefore, we can say that if people more prone to 30, they are more likely to suffer from obesity.
+Among them, obesity_I and overweight have the largest population span, from 20-42 years old.
+
+
+### The height and weight of a person 
+
+height and weight are in positive relationships
+
+```{r}
+ggplot(obesity, aes(x = height,y = weight, color = obe_level)) + 
+  geom_point(size = 2, alpha = 0.6) +
+  geom_smooth(method = "lm", se = FALSE, linetype = "solid", color = "black") +
+  labs(x = "Height",y = "Weight", color = "Obesity level") + 
+  ggtitle("Relationship between Height, Weight, and Obesity Level") 
+```
+
+
+
+### If a family member has experienced or currently experiences issues with being overweight?
+
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= fam_history, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) + 
+              ggtitle("Family history of obesity")
+              
+plot.count
+
+
+```
+most of people have obesity family history.
+
+
+
+### If consume high-calorie food 
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= eat_highcal, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) + 
+              ggtitle("If consume high-calorie food")
+
+plot.count 
+```
+most people eat high-calorie food.
+
+
+
+### Frequency of eating vegetables
+never  = 0
+sometimes = 1
+always = 2
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= vegetables, fill = obe_level )) + 
+  geom_bar() + 
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("Frequency of eating vegetables")
+plot.count 
+```
+
+
+### Number of main meals
+1 = between 1 and 2, 
+2 = three, 
+3 = more than three, 
+4 = no answer
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= num_meals, fill = obe_level )) + 
+  geom_bar() + 
+  theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("Number of main meals")
+plot.count 
+```
+
+most people have more than 3 main meals.
+
+
+
+### If eat any food between meals
+no = 0
+sometimes = 1
+frequently = 2
+always = 3
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= betw_meals, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank())+
+  ggtitle("Frequency of eating food between meals")
+plot.count 
+
+```
+most people sometimes eat food between meals
+
+### If smoke
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= smoke, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank())+
+  ggtitle("Smoke")
+
+plot.count 
+
+```
+most of the people don't smoke
+
+
+
+
+### How much water do you drink daily?
+less than 1 L = 0
+between 1 and 2L =1
+more than 2L = 2
+
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= num_water, fill = obe_level )) + 
+              geom_bar() +
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("How much water do you drink daily?")
+
+plot.count 
+
+```
+
+### Do you monitor the calories you eat daily?
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= monitor_cal, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("Do you monitor the calories you eat daily?")
+
+plot.count 
+
+```
+most of the people don't monitor their calories that they eat every day.
+
+
+
+### How often do you have physical activity?
+I do not have = 0
+1 or 2 days = 1
+2 or 4 days =2
+4 or 5 days =3
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= num_exercise, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("How often do you have physical activity?")
+
+plot.count 
+
+```
+About half of the people don't do physical activity.
+
+
+### How much time do you use electronic devices such as cell phone, videogames, television, computer and others?
+0-2 hours = 0
+3-5 hours = 1
+more than 5 hours = 2
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= time_devices, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("How much time do you use electronic devices?")
+plot.count 
+      
+```
+most of the people use 0-2 hours electronic device
+
+
+### how often do you drink alcohol?
+no = 0
+sometimes = 1
+frequently = 2
+always = 3
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= num_alcohol, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("how often do you drink alcohol?")
+
+plot.count 
+
+```
+
+most of people drink alcohol sometimes.
+
+
+
+### transportation
+
+bike = 0
+motorbike = 1
+automobile= 2
+public transportation = 3
+walking =  4
+
+```{r}
+plot.count <- ggplot(data = obesity, mapping = aes(x= transportation, fill = obe_level )) + 
+              geom_bar() + 
+              theme(axis.title.x = element_blank(), axis.title.y = element_blank()) +
+  ggtitle("Mode of transportation")
+             
+
+plot.count
+              
+```
+
+Most of the people use public transportation.
+
+
+### Relationship between time devices and age
+```{r}
+ggplot(obesity, aes(x = age,y = time_devices, color = obe_level)) + 
+  geom_point(size = 2, alpha = 0.6) +
+  labs(x = "age",y = "time devices") + 
+  ggtitle("Relationship between time devices and age") 
+```
+
+
+
+as we can see that time deceives and age have a negative relationships.
+
+
+From the graphs that generated by the exploratory analysis, 3 main points can be concluded, 
+1.  the the distribution of men and women in this dataset is more evenly balanced,both being in the age range of 20-25 years old.
+2.  obesity is very easily affected by family obesity history.
+3.  the younger the person is, the longer the use of electronic devices is.
+
+
+
+
+## Modeling with tidymodels
+ 
+```{r}
+ cols <- c("gender","fam_history", "eat_highcal",  "betw_meals", "smoke", "monitor_cal", "num_exercise", "time_devices", "num_alcohol", "transportation", "vegetables", "num_meals", "num_water")
+
+for (i in cols){
+  obesity[,i] <- as.integer(unlist(obesity[,i]))
+}
+```
+
+
+
+
+```{r}
+str(obesity)
+```
+
+
+
+
+
+
+
+### Split dataset
+
+```{r}
+if (!require('tidymodels')) install.packages('tidymodels'); library('tidymodels')
+
+tidymodels_prefer()
+set.seed(123)
+
+
+data_split <- initial_split(obesity,prop = 0.7, strata = obe_level)
+
+data_split
+```
+
+
+
+
+```{r}
+train_data <- training(data_split)
+test_data <- testing(data_split)
+
+head(train_data)
+```
+
+
+### Visually check the two sets
+```{r}
+plot_train <- ggplot(train_data, aes(x = 1, fill = obe_level)) +
+  geom_bar() +
+  theme(axis.title.x = element_blank(), axis.ticks.x = element_blank(),  axis.text.x = element_text(colour = "white"), axis.title.y = element_blank()) +
+  theme(legend.position = "none") +
+  coord_cartesian(ylim = c(0, 1500)) +
+  ggtitle("train set")
+
+plot_test <- ggplot(test_data, aes(x = 1, fill = obe_level)) +
+  geom_bar() +
+  theme(axis.title.x = element_blank(), axis.ticks.x = element_blank(),  axis.text.x = element_text(colour = "white"), axis.title.y = element_blank()) +
+  #theme(legend.position = "none") +
+  coord_cartesian(ylim = c(0,1500)) +
+  ggtitle("test set")
+
+plot_grid(plot_train, plot_test, align = "v", rel_widths = c(1, 1.25))
+```
+
+
+
+
+
+
+### Train multiple models
+
+#### Use the grahical interface to select models
+```{r}
+
+if (!require('shiny')) install.packages('shiny'); library('shiny')
+if (!require('miniUI')) install.packages('miniUI'); library('miniUI')
+if (!require('rstudioapi')) install.packages('rstudioapi'); library('rstudioapi')
+
+#parsnip_addin()
+```
+
+```{r}
+
+if (!require('discrim')) install.packages('discrim'); library('discrim')
+if (!require('ranger')) install.packages('ranger'); library('ranger')
+if (!require('nnet')) install.packages('nnet'); library('nnet')
+if (!require('e1071')) install.packages('e1071'); library('e1071')
+```
+
+
+
+### Create recipes to specify model formula and preprocessing
+
+step_dummy() will create "dummy" variables for discrete variables
+step_zv() will remove those  variables that contain only a single value
+```{r}
+obesity_recipe_1 <- 
+  recipe(obe_level ~ gender + age + height + weight + fam_history + eat_highcal + vegetables + num_meals + betw_meals + smoke + num_water +monitor_cal + num_exercise + time_devices + num_alcohol + transportation ,data = obesity) %>% 
+  step_dummy(all_nominal_predictors(),-obe_level) %>% 
+  step_zv(all_predictors())
+
+
+obesity_recipe_2 <- 
+  recipe(obe_level ~ gender + age + height + weight + fam_history + eat_highcal + num_meals + betw_meals + num_exercise  + smoke + monitor_cal + transportation ,data = obesity) %>% 
+  step_dummy(all_nominal_predictors(),-obe_level) %>% 
+  step_zv(all_predictors())
+
+```
+
+
+
+#### Specify the models
+
+decision tree
+random forest
+Multinomial Logistic Regression
+naive Bayes
+support vector machine
+
+```{r}
+
+
+decision_tree_rpart_spec <-
+  decision_tree(min_n = 5) %>%
+  set_engine('rpart') %>%
+  set_mode('classification')
+
+rand_forest_randomForest_spec <-
+  rand_forest() %>%
+  set_engine('randomForest') %>%
+  set_mode('classification')
+
+multinom_reg_nnet_spec <-
+  multinom_reg() %>%
+  set_engine('nnet') %>% 
+  set_mode('classification')
+
+
+naive_Bayes_naivebayes_spec <-
+  naive_Bayes() %>%
+  set_engine('naivebayes') %>% 
+  set_mode('classification')
+
+svm_linear_kernlab_spec <-
+  svm_linear() %>%
+  set_engine('kernlab') %>%
+  set_mode('classification')
+
+
+
+```
+
+
+
+#### Use tidymodels to create a workflow
+```{r}
+obesity_wflow <- 
+  workflow_set(preproc = list(all_features = obesity_recipe_1, smaller_set = obesity_recipe_2),
+               models = list(dtree = decision_tree_rpart_spec,
+                             multilogit = multinom_reg_nnet_spec, 
+                             rforest = rand_forest_randomForest_spec,
+                             naiveBayes = naive_Bayes_naivebayes_spec,
+                             svm = svm_linear_kernlab_spec
+                             )) %>% 
+  option_add(id = "formula_cart", control = control_grid(extract = function(x) x))
+
+obesity_wflow
+```
+
+
+we create a cross-validated folded objects (folds) for model evaluation.
+The training data (train_data) is divided into 5 parts.
+
+```{r}
+folds <- rsample::vfold_cv(train_data,v=10)
+```
+
+
+The entire workflow was fitted on each fold of the cross-validation using the workflow_map() function
+```{r}
+obesity_wflow <- obesity_wflow %>% 
+  workflow_map(resamples = folds, fn = "fit_resamples", verbose = TRUE)
+```
+
+ rank the results
+```{r}
+rank_results(obesity_wflow,rank_metric = "roc_auc")
+```
+
+
+```{r}
+autoplot(obesity_wflow, metric = "roc_auc")
+```
+
+
+
+### Fit optimal model
+
+```{r}
+obesity_wflow_optimal <- 
+  workflow() %>% 
+  add_model(multinom_reg_nnet_spec) %>% 
+  add_recipe(obesity_recipe_2)
+
+```
+
+
+
+```{r}
+obesity_fit <- 
+  obesity_wflow_optimal %>% 
+  fit(data = train_data)  
+
+```
+
+
+the most important variable
+```{r}
+obesity_fit %>% 
+  extract_fit_engine() %>% 
+  varImp()
+```
+
+
+### Predict the test set
+
+We can predict the results of the test set. We predict both probabilities and classes
+
+```{r}
+obesity_ranforest_pred <- test_data %>% 
+  select(obe_level) %>% 
+  bind_cols(predict(obesity_fit, new_data = test_data, type = c("prob")),
+            predict(obesity_fit, new_data = test_data, type = c("class"))
+            )
+
+obesity_ranforest_pred
+```
+
+### Evaluate the model's performance
+
+ROC area under the curve (AUC)
+```{r}
+roc_auc(obesity_ranforest_pred, truth = obe_level, c(".pred_Underweight", 
+                                                     ".pred_Normalweight", 
+                                                     ".pred_Overweight", 
+                                                     ".pred_Obesity_I",
+                                                     ".pred_Obesity_II",
+                                                     ".pred_Obesity_III"))
+```
+Multi-class ROC Curve
+
+```{r}
+obeisty_scores <- obesity_fit %>%
+  predict(test_data, type = 'prob')
+```
+
+
+```{r}
+library(fastDummies)
+obeisty_dummy <- dummy_cols(test_data$obe_level)
+
+colnames(obeisty_dummy) <- c('obsity', 'Underweight', 'Normalweight', 'Overweight','Obesity_I','Obesity_II','Obesity_III')
+obeisty_dummy <- subset(obeisty_dummy, select = -c(obsity))
+```
+
+
+```{r}
+obesity_togeter <- cbind(obeisty_scores, obeisty_dummy)
+```
+
+
+```{r}
+obesity_togeter$Underweight <- as.factor(obesity_togeter$Underweight)
+roc_Underweight <- roc_curve(data = obesity_togeter, Underweight, .pred_Underweight)
+roc_Underweight$specificity <- 1 - roc_Underweight$specificity
+colnames(roc_Underweight) <- c('threshold', 'tpr', 'fpr')
+auc_Underweight <- roc_auc(data = obesity_togeter, Underweight, .pred_Underweight)
+auc_Underweight <- auc_Underweight$.estimate
+Underweight <- paste('Underweight (AUC=',toString(round(1-auc_Underweight,2)),')',sep = '')
+```
+
+
+```{r}
+obesity_togeter$Normalweight <- as.factor(obesity_togeter$Normalweight)
+roc_Normalweight <- roc_curve(data = obesity_togeter, Normalweight, .pred_Normalweight)
+roc_Normalweight$specificity <- 1 - roc_Normalweight$specificity
+colnames(roc_Normalweight) <- c('threshold', 'tpr', 'fpr')
+auc_Normalweight <- roc_auc(data = obesity_togeter, Normalweight, .pred_Normalweight)
+auc_Normalweight <- auc_Normalweight$.estimate
+Normalweight <- paste('Normalweight (AUC=',toString(round(1-auc_Normalweight,2)),')', sep = '')
+```
+
+
+```{r}
+obesity_togeter$Overweight <- as.factor(obesity_togeter$Overweight)
+roc_Overweight <- roc_curve(data = obesity_togeter, Overweight, .pred_Overweight)
+roc_Overweight$specificity <- 1 - roc_Overweight$specificity
+colnames(roc_Overweight) <- c('threshold', 'tpr', 'fpr')
+auc_Overweight <- roc_auc(data = obesity_togeter, Overweight, .pred_Overweight)
+auc_Overweight <- auc_Overweight$.estimate
+Overweight <- paste('Overweight (AUC=',toString(round(1-auc_Overweight,2)),')', sep = '')
+```
+
+
+Obesity_I 
+```{r}
+obesity_togeter$Obesity_I <- as.factor(obesity_togeter$Obesity_I)
+roc_Obesity_I <- roc_curve(data = obesity_togeter, Obesity_I, .pred_Obesity_I)
+roc_Obesity_I$specificity <- 1 - roc_Obesity_I$specificity
+colnames(roc_Obesity_I) <- c('threshold', 'tpr', 'fpr')
+auc_Obesity_I<- roc_auc(data = obesity_togeter, Obesity_I, .pred_Obesity_I)
+auc_Obesity_I <- auc_Obesity_I$.estimate
+Obesity_I <- paste('Obesity_II (AUC=',toString(round(1-auc_Obesity_I,2)),')', sep = '')
+```
+
+```{r}
+obesity_togeter$Obesity_II <- as.factor(obesity_togeter$Obesity_II)
+roc_Obesity_II <- roc_curve(data = obesity_togeter, Obesity_II, .pred_Obesity_II)
+roc_Obesity_II$specificity <- 1 - roc_Obesity_II$specificity
+colnames(roc_Obesity_II) <- c('threshold', 'tpr', 'fpr')
+auc_Obesity_II<- roc_auc(data = obesity_togeter, Obesity_II, .pred_Obesity_II)
+auc_Obesity_II <- auc_Obesity_II$.estimate
+Obesity_II <- paste('Obesity_II (AUC=',toString(round(1-auc_Obesity_II,2)),')', sep = '')
+```
+
+
+```{r}
+obesity_togeter$Obesity_III <- as.factor(obesity_togeter$Obesity_III)
+roc_Obesity_III <- roc_curve(data = obesity_togeter, Obesity_III, .pred_Obesity_III)
+roc_Obesity_III$specificity <- 1 - roc_Obesity_III$specificity
+colnames(roc_Obesity_III) <- c('threshold', 'tpr', 'fpr')
+auc_Obesity_III<- roc_auc(data = obesity_togeter, Obesity_III, .pred_Obesity_III)
+auc_Obesity_III <- auc_Obesity_III$.estimate
+Obesity_III <- paste('Obesity_III (AUC=',toString(round(1-auc_Obesity_III,2)),')', sep = '')
+```
+
+
+```{r}
+
+
+if (!require('plotly')) install.packages('plotly'); library('plotly')
+
+fig <- plot_ly()%>%
+  add_segments(x = 0, xend = 1, y = 0, yend = 1, line = list(dash = "dash", color = 'black'), showlegend = FALSE) %>%
+  add_trace(data = roc_Underweight,x = ~fpr, y = ~tpr, mode = 'lines', name = Underweight, type = 'scatter')%>%
+  add_trace(data = roc_Normalweight,x = ~fpr, y = ~tpr, mode = 'lines', name = Normalweight, type = 'scatter')%>%
+  add_trace(data = roc_Overweight,x = ~fpr, y = ~tpr, mode = 'lines', name = Overweight, type = 'scatter')%>%
+  add_trace(data = roc_Obesity_I,x = ~fpr, y = ~tpr, mode = 'lines', name = Obesity_I, type = 'scatter')%>%
+  add_trace(data = roc_Obesity_II,x = ~fpr, y = ~tpr, mode = 'lines', name = Obesity_II, type = 'scatter')%>%
+  add_trace(data = roc_Obesity_III,x = ~fpr, y = ~tpr, mode = 'lines', name = Obesity_III, type = 'scatter')%>%
+  plotly::layout(xaxis = list(title = "False Positive Rate"), 
+         yaxis = list(title = "True Positive Rate"),
+         legend = list(x = 100, y = 0.5))
+fig
+```
+
+Accuracy and others
+```{r}
+classification_metrics <- metric_set(accuracy, precision, recall,f_meas)
+
+classification_metrics(obesity_ranforest_pred, truth = obe_level, estimate = .pred_class)
+```
+```{r}
+w <- train_data %>% 
+  select(obe_level) %>% 
+  bind_cols(predict(obesity_fit, new_data = train_data, type = c("prob")),
+            predict(obesity_fit, new_data = train_data, type = c("class"))
+            )
+
+w
+```
+
+
+
+
+```{r}
+x <- classification_metrics(w, truth = obe_level, estimate = .pred_class)
+x
+```
+
+And the confusion matrix
+
+```{r}
+conf_mat(obesity_ranforest_pred,truth = obe_level, estimate = .pred_class)
+```
+
+```{r}
+
+library(openxlsx)
+excel_file <- "..."
+
+write.xlsx(obesity, excel_file)
+```
+
+
+
+```{r}
+saveRDS(obesity_fit,"...")
+```
+
+
+```{r}
+a <- as.vector(train_data[291,])
+
+b <- c(1, 22, 1.78, 50, 2, 2, 3, 2, 2,3,1,1)
+
+b_df <- data.frame(
+  gender = b[1], 
+  age = b[2],
+  height = b[3],
+  weight = b[4],
+  fam_history = b[5],
+  eat_highcal = b[6],
+  num_meals = b[7],
+  betw_meals = b[8],
+  num_exercise = b[9],
+  transportation = b[10],
+  smoke = b[11],
+  monitor_cal = b[12]
+
+)
+
+```
+
+```{r}
+str(b)
+```
+
+```{r}
+predict(obesity_fit, b_df, type = "prob")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
